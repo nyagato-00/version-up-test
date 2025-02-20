@@ -25,47 +25,23 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Fetch latest develop branch
+      - name: Define branch name
+        id: branch-name
+        run: echo "branch_name=auto_versionup" >> $GITHUB_OUTPUT
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Fetch and checkout develop
         run: |
           git fetch origin develop
           git checkout develop
           git pull origin develop
 
-      - name: Define branch name
-        id: branch-name
-        run: echo "branch_name=auto_versionup" >> $GITHUB_OUTPUT
-
-      - name: Check if branch already exists
-        id: check-branch
-        run: |
-          BRANCH_NAME=${{ steps.branch-name.outputs.branch_name }}
-          if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
-            echo "Branch already exists: $BRANCH_NAME"
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Branch does not exist: $BRANCH_NAME"
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create or Checkout Branch
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          BRANCH_NAME=${{ steps.branch-name.outputs.branch_name }}
-
-          if [ "${{ steps.check-branch.outputs.exists }}" == "true" ]; then
-            git checkout "$BRANCH_NAME"
-            git pull origin "$BRANCH_NAME"
-            git merge develop --no-edit
-          else
-            git checkout -b "$BRANCH_NAME" develop
-          fi
-
-      - name: Install dependencies
-        run: |
-          if ! npm ci; then
-            npm install
-          fi
+      - name: Create version up branch
+        run: git checkout -b ${{ steps.branch-name.outputs.branch_name }}
 
       - name: Version up
         id: version-up
@@ -85,27 +61,25 @@ jobs:
 
       - name: Push changes
         run: |
-          git push origin ${{ steps.branch-name.outputs.branch_name }}
+          git push --force origin ${{ steps.branch-name.outputs.branch_name }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: "Version Up to v${{ steps.version-up.outputs.new_version }}"
-          body: |
-            ## 自動バージョンアップPR
-            
-            現在のバージョン: v${{ steps.version-up.outputs.current_version }}
-            新しいバージョン: v${{ steps.version-up.outputs.new_version }}
-            
-            ### 変更内容
-            - `npm version minor` を実行
-            - `package.json` を更新
-            
-            ### 注意事項
-            - このPRはGitHub Actionsによって自動生成されています
-            - マージ前に依存関係に問題がないか確認してください
-          branch: ${{ steps.branch-name.outputs.branch_name }}
-          base: develop
-          delete-branch: false
-          commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base develop \
+            --head ${{ steps.branch-name.outputs.branch_name }} \
+            --title "Version Up to v${{ steps.version-up.outputs.new_version }}" \
+            --body "## 自動バージョンアップPR
+
+          現在のバージョン: v${{ steps.version-up.outputs.current_version }}
+          新しいバージョン: v${{ steps.version-up.outputs.new_version }}
+
+          ### 変更内容
+          - \`npm version minor\` を実行
+          - \`package.json\` を更新
+
+          ### 注意事項
+          - このPRはGitHub Actionsによって自動生成されています
+          - マージ前に依存関係に問題がないか確認してください"
