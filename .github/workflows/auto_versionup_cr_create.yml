@@ -2,10 +2,7 @@ name: Auto Version Up
 
 on:
   schedule:
-    # 毎週月曜〜金曜の午前9時(UTC 0時)に実行
-    - cron: "25 1 * * 1-5"
-
-  # 手動実行用
+    - cron: "0 0 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -17,9 +14,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # GitHub App のトークンを生成するステップを追加
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.PRIVATE_KEY }}
+
+      # checkoutでトークンを使用
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,23 +41,17 @@ jobs:
       - name: Version up
         id: version-up
         run: |
-          # 現在のバージョンを取得
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          
-          # バージョンアップを実行
           npm version minor
-          
-          # 新しいバージョンを取得
           NEW_VERSION=$(node -p "require('./package.json').version")
-          
-          # 出力を設定
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
+      # PRの作成でもトークンを使用
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}  # GitHub TOKENの代わりにApp tokenを使用
           commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
           branch: auto_versionup
           base: develop
@@ -61,14 +62,14 @@ jobs:
             package-lock.json
           body: |
             ## 自動バージョンアップPR
-            
+
             現在のバージョン: v${{ steps.version-up.outputs.current_version }}
             新しいバージョン: v${{ steps.version-up.outputs.new_version }}
-            
+
             ### 変更内容
             - `npm version minor` を実行
             - `package.json` を更新
-            
+
             ### 注意事項
             - このPRはGitHub Actionsによって自動生成されています
             - マージ前に依存関係に問題がないか確認してください
