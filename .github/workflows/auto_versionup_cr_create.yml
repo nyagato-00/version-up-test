@@ -8,12 +8,13 @@ on:
   # 手動実行用
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   create-pr:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -64,22 +65,24 @@ jobs:
           git push --force origin ${{ steps.branch-name.outputs.branch_name }}
 
       - name: Create Pull Request
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr create \
-            --base develop \
-            --head ${{ steps.branch-name.outputs.branch_name }} \
-            --title "Version Up to v${{ steps.version-up.outputs.new_version }}" \
-            --body "## 自動バージョンアップPR
-
-          現在のバージョン: v${{ steps.version-up.outputs.current_version }}
-          新しいバージョン: v${{ steps.version-up.outputs.new_version }}
-
-          ### 変更内容
-          - \`npm version minor\` を実行
-          - \`package.json\` を更新
-
-          ### 注意事項
-          - このPRはGitHub Actionsによって自動生成されています
-          - マージ前に依存関係に問題がないか確認してください"
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
+          branch: ${{ steps.branch-name.outputs.branch_name }}
+          base: develop
+          delete-branch: false
+          title: "Version Up to v${{ steps.version-up.outputs.new_version }}"
+          body: |
+            ## 自動バージョンアップPR
+            
+            現在のバージョン: v${{ steps.version-up.outputs.current_version }}
+            新しいバージョン: v${{ steps.version-up.outputs.new_version }}
+            
+            ### 変更内容
+            - `npm version minor` を実行
+            - `package.json` を更新
+            
+            ### 注意事項
+            - このPRはGitHub Actionsによって自動生成されています
+            - マージ前に依存関係に問題がないか確認してください
