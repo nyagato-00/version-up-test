@@ -19,13 +19,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          clean: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: 'npm'
 
       - name: Fetch latest develop branch
         run: |
@@ -33,23 +31,12 @@ jobs:
           git checkout develop
           git pull origin develop
 
-      - name: Check for changes in develop
-        id: check-changes
-        run: |
-          # 最後のワークフロー実行以降の変更をチェック
-          if git log --since="1 week ago" --pretty=format:"%h" develop | grep -q .; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Define branch name
         id: branch-name
         run: echo "branch_name=auto_versionup" >> $GITHUB_OUTPUT
 
       - name: Check if branch already exists
         id: check-branch
-        if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           BRANCH_NAME=${{ steps.branch-name.outputs.branch_name }}
           if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
@@ -61,7 +48,6 @@ jobs:
           fi
 
       - name: Create or Checkout Branch
-        if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -76,25 +62,19 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           if ! npm ci; then
-            echo "Error: npm ci failed"
-            exit 1
+            npm install
           fi
 
       - name: Version up
-        if: steps.check-changes.outputs.has_changes == 'true'
         id: version-up
         run: |
           # 現在のバージョンを取得
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           
           # バージョンアップを実行
-          if ! npm version minor; then
-            echo "Error: Version up failed"
-            exit 1
-          fi
+          npm version minor
           
           # 新しいバージョンを取得
           NEW_VERSION=$(node -p "require('./package.json').version")
@@ -104,12 +84,10 @@ jobs:
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Push changes
-        if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           git push origin ${{ steps.branch-name.outputs.branch_name }}
 
-      - name: Create or Update Pull Request
-        if: steps.check-changes.outputs.has_changes == 'true'
+      - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -122,7 +100,7 @@ jobs:
             
             ### 変更内容
             - `npm version minor` を実行
-            - `package.json` と `package-lock.json` を更新
+            - `package.json` を更新
             
             ### 注意事項
             - このPRはGitHub Actionsによって自動生成されています
@@ -130,3 +108,4 @@ jobs:
           branch: ${{ steps.branch-name.outputs.branch_name }}
           base: develop
           delete-branch: false
+          commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
