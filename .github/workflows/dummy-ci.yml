@@ -1,0 +1,31 @@
+# .github/workflows/dummy-ci.yml
+name: Dummy CI
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  test:
+    name: test-task # check-regexpでマッチングしやすい名前に変更
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Tests
+        run: |
+          echo "Running tests..."
+          sleep 10
+          echo "Tests completed successfully!"
+        
+  build:
+    name: build-task # check-regexpでマッチングしやすい名前に変更
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Build
+        run: |
+          echo "Running build..."
+          sleep 10
+          echo "Build completed successfully!"
