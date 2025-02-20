@@ -1,0 +1,132 @@
+name: Auto Version Up
+
+on:
+  schedule:
+    # 毎週月曜〜金曜の午前9時(UTC 0時)に実行
+    - cron: "0 0 * * 1-5"
+
+  # 手動実行用
+  workflow_dispatch:
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'npm'
+
+      - name: Fetch latest develop branch
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git pull origin develop
+
+      - name: Check for changes in develop
+        id: check-changes
+        run: |
+          # 最後のワークフロー実行以降の変更をチェック
+          if git log --since="1 week ago" --pretty=format:"%h" develop | grep -q .; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Define branch name
+        id: branch-name
+        run: echo "branch_name=auto_versionup" >> $GITHUB_OUTPUT
+
+      - name: Check if branch already exists
+        id: check-branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          BRANCH_NAME=${{ steps.branch-name.outputs.branch_name }}
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
+            echo "Branch already exists: $BRANCH_NAME"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Branch does not exist: $BRANCH_NAME"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or Checkout Branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          BRANCH_NAME=${{ steps.branch-name.outputs.branch_name }}
+
+          if [ "${{ steps.check-branch.outputs.exists }}" == "true" ]; then
+            git checkout "$BRANCH_NAME"
+            git pull origin "$BRANCH_NAME"
+            git merge develop --no-edit
+          else
+            git checkout -b "$BRANCH_NAME" develop
+          fi
+
+      - name: Install dependencies
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          if ! npm ci; then
+            echo "Error: npm ci failed"
+            exit 1
+          fi
+
+      - name: Version up
+        if: steps.check-changes.outputs.has_changes == 'true'
+        id: version-up
+        run: |
+          # 現在のバージョンを取得
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          
+          # バージョンアップを実行
+          if ! npm version minor; then
+            echo "Error: Version up failed"
+            exit 1
+          fi
+          
+          # 新しいバージョンを取得
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          
+          # 出力を設定
+          echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Push changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git push origin ${{ steps.branch-name.outputs.branch_name }}
+
+      - name: Create or Update Pull Request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Version Up to v${{ steps.version-up.outputs.new_version }}"
+          body: |
+            ## 自動バージョンアップPR
+            
+            現在のバージョン: v${{ steps.version-up.outputs.current_version }}
+            新しいバージョン: v${{ steps.version-up.outputs.new_version }}
+            
+            ### 変更内容
+            - `npm version minor` を実行
+            - `package.json` と `package-lock.json` を更新
+            
+            ### 注意事項
+            - このPRはGitHub Actionsによって自動生成されています
+            - マージ前に依存関係に問題がないか確認してください
+          branch: ${{ steps.branch-name.outputs.branch_name }}
+          base: develop
+          delete-branch: false
