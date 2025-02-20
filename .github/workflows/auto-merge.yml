@@ -1,0 +1,40 @@
+# .github/workflows/auto-merge.yml
+name: Auto Merge Workflow
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'auto_versionup'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Wait for all CI checks
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          running-workflow-name: "Auto Merge Workflow" # 現在のワークフローを除外
+          check-regexp: "^(?!Auto Merge Workflow).*$" # Auto Merge Workflow以外の全てのチェックを待つ
+
+      - name: Auto merge
+        if: success()
+        uses: pascalgn/automerge-action@v0.15.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_LABELS: ""
+          MERGE_METHOD: "squash"
+          MERGE_COMMIT_MESSAGE: "Auto merge for auto_versionup"
+          MERGE_RETRIES: "6"
+          MERGE_RETRY_SLEEP: "10000"
