@@ -1,0 +1,59 @@
+name: Auto Create Staging PR
+
+on:
+  workflow_run:
+    workflows: ["auto-merge"]
+    types:
+      - completed
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: develop
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Get version from package.json
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: merge develop into release (v${{ steps.package-version.outputs.version }})"
+          branch: release
+          base: release
+          head: develop
+          delete-branch: false
+          title: "develop → release (v${{ steps.package-version.outputs.version }})"
+          labels: |
+            release
+            automated-pr
+          body: |
+            ## リリース用PR (v${{ steps.package-version.outputs.version }})
+            
+            ### 概要
+            developブランチの変更をreleaseブランチにマージするPRです。
+            
+            ### バージョン情報
+            - リリースバージョン: v${{ steps.package-version.outputs.version }}
+            
+            ### 変更内容
+            - developブランチの全ての変更を含みます
+            
+            ### 注意事項
+            - このPRはGitHub Actionsによって自動生成されています
+            - マージ前に変更内容を慎重に確認してください
