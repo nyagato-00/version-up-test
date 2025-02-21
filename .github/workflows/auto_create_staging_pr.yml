@@ -43,17 +43,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ steps.generate_token.outputs.token }}
-          commit-message: "chore: merge develop into release (v${{ steps.package-version.outputs.version }})"
-          branch: release
-          base: develop
-          head: develop
-          delete-branch: false
-          title: "develop → release (v${{ steps.package-version.outputs.version }})"
-          body: |
-            ## リリース用PR (v${{ steps.package-version.outputs.version }})
+        run: |
+          gh pr create \
+            --base release \
+            --head develop \
+            --title "develop → release (v${{ steps.package-version.outputs.version }})" \
+            --body "## リリース用PR (v${{ steps.package-version.outputs.version }})
             
             ### 概要
             developブランチの変更をreleaseブランチにマージするPRです。
@@ -66,4 +61,8 @@ jobs:
             
             ### 注意事項
             - このPRはGitHub Actionsによって自動生成されています
-            - マージ前に変更内容を慎重に確認してください
+            - マージ前に変更内容を慎重に確認してください" \
+            --label "release" \
+            --label "automated-pr"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
