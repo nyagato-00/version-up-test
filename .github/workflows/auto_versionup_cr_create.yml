@@ -55,7 +55,7 @@ jobs:
           commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
           branch: auto_versionup
           base: develop
-          delete-branch: false
+          delete-branch: true
           title: "Version Up to v${{ steps.version-up.outputs.new_version }}"
           add-paths: |
             package.json
