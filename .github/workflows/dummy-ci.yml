@@ -2,7 +2,7 @@
 name: Dummy CI
 
 on:
-  pull_request_target:  # 変更点
+  pull_request:
     types:
       - opened
       - synchronize
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4  # 追加
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - name: Checkout repository  # 追加
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
