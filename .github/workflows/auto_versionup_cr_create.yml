@@ -1,0 +1,75 @@
+name: Auto Version Up
+
+on:
+  schedule:
+    - cron: "0 0 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      # GitHub App のトークンを生成するステップを追加
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.PRIVATE_KEY }}
+
+      # checkoutでトークンを使用
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Version up
+        id: version-up
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          npm version minor
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      # PRの作成でもトークンを使用
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ steps.generate_token.outputs.token }}  # GitHub TOKENの代わりにApp tokenを使用
+          commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
+          branch: auto_versionup
+          base: develop
+          delete-branch: false
+          title: "Version Up to v${{ steps.version-up.outputs.new_version }}"
+          add-paths: |
+            package.json
+            package-lock.json
+          body: |
+            ## 自動バージョンアップPR
+
+            現在のバージョン: v${{ steps.version-up.outputs.current_version }}
+            新しいバージョン: v${{ steps.version-up.outputs.new_version }}
+
+            ### 変更内容
+            - `npm version minor` を実行
+            - `package.json` を更新
+
+            ### 注意事項
+            - このPRはGitHub Actionsによって自動生成されています
+            - マージ前に依存関係に問題がないか確認してください
