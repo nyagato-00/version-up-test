@@ -1,8 +1,8 @@
-# .github/workflows/auto-merge.yml
-name: Auto Merge Workflow
+# .github/workflows/auto-merge-release.yml
+name: Auto Merge Release Workflow
 
 on:
-  pull_request_target:  # 変更点
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -16,12 +16,12 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.head_ref == 'auto_versionup' && github.base_ref == 'develop'
+    if: github.head_ref == 'develop' && github.base_ref == 'release'
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:  # 追加
+        with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
