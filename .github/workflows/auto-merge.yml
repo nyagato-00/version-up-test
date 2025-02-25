@@ -2,7 +2,7 @@
 name: Auto Merge Workflow
 
 on:
-  pull_request_target:  # 変更点
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -21,26 +21,33 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:  # 追加
+        with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-      - name: Wait for CI checks
-        uses: lewagon/wait-on-check-action@v1.3.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          running-workflow-name: "Auto Merge Workflow"
-          check-regexp: ".*-task$"
+      # - name: Wait for CI checks
+      #   uses: lewagon/wait-on-check-action@v1.3.1
+      #   with:
+      #     ref: ${{ github.event.pull_request.head.sha }}
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
+      #     wait-interval: 30
+      #     running-workflow-name: "Auto Merge Workflow"
+      #     check-regexp: ".*-task$"
+      #     allowed-conclusions: success,skipped
 
-      - name: Auto merge
-        if: success()
-        uses: pascalgn/automerge-action@v0.15.6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_LABELS: ""
-          MERGE_METHOD: "squash"
-          MERGE_COMMIT_MESSAGE: "Auto merge for auto_versionup"
-          MERGE_RETRIES: "6"
-          MERGE_RETRY_SLEEP: "10000"
+      # - name: Auto merge PR
+      #   if: success()
+      #   run: |
+      #     PR_NUMBER=${{ github.event.pull_request.number }}
+          
+      #     echo "Merging PR #$PR_NUMBER from auto_versionup to develop"
+      #     gh pr merge $PR_NUMBER --squash --delete-branch=false --subject "Auto merge for auto_versionup"
+          
+      #     if [ $? -eq 0 ]; then
+      #       echo "PR #$PR_NUMBER successfully merged"
+      #     else
+      #       echo "Failed to merge PR #$PR_NUMBER"
+      #       exit 1
+      #     fi
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
