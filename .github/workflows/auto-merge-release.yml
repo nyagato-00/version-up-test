@@ -108,15 +108,46 @@ jobs:
             console.log(`Attempting to merge PR #${pullRequest.number}`);
             
             try {
+              // Merge the PR
               await github.rest.pulls.merge({
                 owner,
                 repo,
                 pull_number: pullRequest.number,
-                merge_method: 'squash',
-                commit_title: `Auto merge from develop to release [${pullRequest.head.ref} → ${pullRequest.base.ref}]`,
+                merge_method: 'merge',  // 'squash'ではなく'merge'を使用
+                commit_title: `Merge develop to release [${pullRequest.head.ref} → ${pullRequest.base.ref}]`,
                 commit_message: 'Automatically merged PR by GitHub Actions workflow.'
               });
               console.log('Merge successful!');
+              
+              // 追加: マージ後にreleaseブランチの状態を確認
+              await new Promise(resolve => setTimeout(resolve, 5000)); // 5秒待機
+              
+              // releaseブランチの最新コミットを取得
+              const { data: releaseRef } = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: 'heads/release'
+              });
+              console.log(`Release branch is now at: ${releaseRef.object.sha}`);
+              
+              // developブランチの最新コミットを取得
+              const { data: developRef } = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: 'heads/develop'
+              });
+              console.log(`Develop branch is at: ${developRef.object.sha}`);
+              
+              // 差分があるか確認（デバッグ用）
+              const { data: comparison } = await github.rest.repos.compareCommits({
+                owner,
+                repo,
+                base: 'release',
+                head: 'develop'
+              });
+              console.log(`Comparison status: ${comparison.status}`);
+              console.log(`Files different: ${comparison.files.length}`);
+              
             } catch (error) {
               console.error('Failed to merge PR:', error);
               core.setFailed(`Failed to merge PR: ${error.message}`);
