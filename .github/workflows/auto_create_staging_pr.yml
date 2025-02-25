@@ -31,38 +31,38 @@ jobs:
           ref: develop
           token: ${{ steps.generate_token.outputs.token }}
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      # - name: Configure Git
+      #   run: |
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Get version from package.json
-        id: package-version
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      # - name: Get version from package.json
+      #   id: package-version
+      #   run: |
+      #     VERSION=$(node -p "require('./package.json').version")
+      #     echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request
-        run: |
-          gh pr create \
-            --base release \
-            --head develop \
-            --title "develop → release (v${{ steps.package-version.outputs.version }})" \
-            --body "## リリース用PR (v${{ steps.package-version.outputs.version }})
+      # - name: Create Pull Request
+      #   run: |
+      #     gh pr create \
+      #       --base release \
+      #       --head develop \
+      #       --title "develop → release (v${{ steps.package-version.outputs.version }})" \
+      #       --body "## リリース用PR (v${{ steps.package-version.outputs.version }})
             
-            ### 概要
-            developブランチの変更をreleaseブランチにマージするPRです。
+      #       ### 概要
+      #       developブランチの変更をreleaseブランチにマージするPRです。
             
-            ### バージョン情報
-            - リリースバージョン: v${{ steps.package-version.outputs.version }}
+      #       ### バージョン情報
+      #       - リリースバージョン: v${{ steps.package-version.outputs.version }}
             
-            ### 変更内容
-            - developブランチの全ての変更を含みます
+      #       ### 変更内容
+      #       - developブランチの全ての変更を含みます
             
-            ### 注意事項
-            - このPRはGitHub Actionsによって自動生成されています
-            - マージ前に変更内容を慎重に確認してください" \
-            --label "release" \
-            --label "automated-pr"
-        env:
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+      #       ### 注意事項
+      #       - このPRはGitHub Actionsによって自動生成されています
+      #       - マージ前に変更内容を慎重に確認してください" \
+      #       --label "release" \
+      #       --label "automated-pr"
+      #   env:
+      #     GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}

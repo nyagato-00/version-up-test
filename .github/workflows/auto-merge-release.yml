@@ -25,22 +25,22 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-      - name: Wait for CI checks
-        uses: lewagon/wait-on-check-action@v1.3.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          running-workflow-name: "Auto Merge Workflow"
-          check-regexp: ".*-task$"
+      # - name: Wait for CI checks
+      #   uses: lewagon/wait-on-check-action@v1.3.1
+      #   with:
+      #     ref: ${{ github.event.pull_request.head.sha }}
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
+      #     wait-interval: 30
+      #     running-workflow-name: "Auto Merge Workflow"
+      #     check-regexp: ".*-task$"
 
-      - name: Auto merge
-        if: success()
-        uses: pascalgn/automerge-action@v0.15.6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_LABELS: ""
-          MERGE_METHOD: "squash"
-          MERGE_COMMIT_MESSAGE: "Auto merge for auto_versionup"
-          MERGE_RETRIES: "6"
-          MERGE_RETRY_SLEEP: "10000"
+      # - name: Auto merge
+      #   if: success()
+      #   uses: pascalgn/automerge-action@v0.15.6
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     MERGE_LABELS: ""
+      #     MERGE_METHOD: "squash"
+      #     MERGE_COMMIT_MESSAGE: "Auto merge for auto_versionup"
+      #     MERGE_RETRIES: "6"
+      #     MERGE_RETRY_SLEEP: "10000"
