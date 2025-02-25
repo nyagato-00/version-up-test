@@ -24,23 +24,100 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
 
-      # - name: Wait for CI checks
-      #   uses: lewagon/wait-on-check-action@v1.3.1
-      #   with:
-      #     ref: ${{ github.event.pull_request.head.sha }}
-      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
-      #     wait-interval: 30
-      #     running-workflow-name: "Auto Merge Workflow"
-      #     check-regexp: ".*-task$"
+      - name: Wait for required checks to pass
+        id: wait-for-checks
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pullRequest = context.payload.pull_request;
+            
+            console.log(`Waiting for required checks on PR #${pullRequest.number}`);
+            
+            // Wait for up to 10 minutes (60 * 10 = 600 seconds)
+            const timeout = 600000;
+            const startTime = Date.now();
+            const interval = 30000; // 30 seconds
+            
+            while (Date.now() - startTime < timeout) {
+              // Get latest PR commit
+              const { data: commits } = await github.rest.pulls.listCommits({
+                owner,
+                repo,
+                pull_number: pullRequest.number
+              });
+              
+              const lastCommitSha = commits[commits.length - 1].sha;
+              console.log(`Last commit SHA: ${lastCommitSha}`);
+              
+              // Check status of required checks
+              const { data: checkRuns } = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: lastCommitSha
+              });
+              
+              console.log(`Found ${checkRuns.check_runs.length} check runs`);
+              
+              // Filter to only include relevant checks
+              const ciChecks = checkRuns.check_runs.filter(check => 
+                check.name.endsWith('-task') || 
+                check.name.includes('ci') || 
+                check.name.includes('test')
+              );
+              
+              if (ciChecks.length === 0) {
+                console.log('No CI checks found yet, waiting...');
+                await new Promise(resolve => setTimeout(resolve, interval));
+                continue;
+              }
+              
+              const pendingChecks = ciChecks.filter(check => 
+                check.status !== 'completed' || 
+                (check.status === 'completed' && check.conclusion !== 'success')
+              );
+              
+              if (pendingChecks.length === 0) {
+                console.log('All required checks have passed!');
+                return { success: true };
+              }
+              
+              console.log(`Waiting for ${pendingChecks.length} checks to complete:`);
+              pendingChecks.forEach(check => {
+                console.log(`- ${check.name}: ${check.status}, ${check.conclusion || 'pending'}`);
+              });
+              
+              await new Promise(resolve => setTimeout(resolve, interval));
+            }
+            
+            console.log('Timed out waiting for checks');
+            return { success: false, timedOut: true };
 
-      # - name: Auto merge
-      #   if: success()
-      #   uses: pascalgn/automerge-action@v0.15.6
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     MERGE_LABELS: ""
-      #     MERGE_METHOD: "squash"
-      #     MERGE_COMMIT_MESSAGE: "Auto merge for auto_versionup"
-      #     MERGE_RETRIES: "6"
-      #     MERGE_RETRY_SLEEP: "10000"
+      - name: Auto merge PR
+        if: steps.wait-for-checks.outputs.result != '{"success":false,"timedOut":true}'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pullRequest = context.payload.pull_request;
+            
+            console.log(`Attempting to merge PR #${pullRequest.number}`);
+            
+            try {
+              await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pullRequest.number,
+                merge_method: 'squash',
+                commit_title: `Auto merge from develop to release [${pullRequest.head.ref} → ${pullRequest.base.ref}]`,
+                commit_message: 'Automatically merged PR by GitHub Actions workflow.'
+              });
+              console.log('Merge successful!');
+            } catch (error) {
+              console.error('Failed to merge PR:', error);
+              core.setFailed(`Failed to merge PR: ${error.message}`);
+            }
