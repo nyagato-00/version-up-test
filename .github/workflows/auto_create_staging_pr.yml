@@ -42,8 +42,50 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Get last release tag
+        id: last-release
+        run: |
+          LAST_RELEASE_COMMIT=$(git log release --format="%H" -n 1)
+          echo "commit=$LAST_RELEASE_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Get PR list between releases
+        id: pr-list
+        run: |
+          # 最後のreleaseブランチのコミットからdevelopブランチの現在のコミットまでのすべてのマージコミットを取得
+          MERGE_COMMITS=$(git log ${{ steps.last-release.outputs.commit }}..HEAD --merges --format="%H")
+          
+          # PRリストを作成
+          PR_LIST=""
+          echo "マージされたPRの詳細を収集しています..."
+          for COMMIT in $MERGE_COMMITS; do
+            # マージコミットからPRナンバーを抽出
+            PR_NUMBER=$(git show $COMMIT --format="%s" -s | grep -oE '#[0-9]+' | sed 's/#//')
+            
+            if [ ! -z "$PR_NUMBER" ]; then
+              # GitHub APIを使用してPRの詳細を取得
+              PR_DETAILS=$(gh pr view $PR_NUMBER --json title,number,author)
+              PR_TITLE=$(echo $PR_DETAILS | jq -r '.title')
+              PR_AUTHOR=$(echo $PR_DETAILS | jq -r '.author.login')
+              
+              # PRリストに追加
+              PR_LIST="$PR_LIST\n- #$PR_NUMBER: $PR_TITLE (@$PR_AUTHOR)"
+            fi
+          done
+          
+          # 出力をファイルに保存（複数行の変数を扱うため）
+          echo "$PR_LIST" > pr_list.txt
+          echo "PR一覧を生成しました"
+
       - name: Create Pull Request
         run: |
+          # PRリストを読み込む
+          PR_LIST=$(cat pr_list.txt)
+          
+          # PRリストが空の場合のデフォルトメッセージ
+          if [ -z "$PR_LIST" ]; then
+            PR_LIST="- 特記すべきPRはありません"
+          fi
+          
           gh pr create \
             --base release \
             --head develop \
@@ -55,6 +97,9 @@ jobs:
             
             ### バージョン情報
             - リリースバージョン: v${{ steps.package-version.outputs.version }}
+            
+            ### 含まれるPR
+            ${PR_LIST}
             
             ### 変更内容
             - developブランチの全ての変更を含みます
