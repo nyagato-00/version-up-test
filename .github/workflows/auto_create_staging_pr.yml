@@ -42,8 +42,89 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request
+      - name: Check if release branch exists
+        id: check-release
         run: |
+          if git ls-remote --heads origin release | grep release; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get PR list
+        id: pr-list
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          # releaseブランチが存在する場合は差分を取得、存在しない場合は全てのPRを対象にする
+          if [ "${{ steps.check-release.outputs.exists }}" == "true" ]; then
+            echo "releaseブランチが存在します。差分を取得します。"
+            git fetch origin release
+            BASE_COMMIT=$(git rev-parse origin/release)
+          else
+            echo "releaseブランチが存在しません。初回リリースとして全てのPRを取得します。"
+            # 非常に古いコミットを基準点として使用（実質的に全履歴）
+            BASE_COMMIT=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "ベースコミット: $BASE_COMMIT"
+          
+          # マージコミットを取得
+          MERGE_COMMITS=$(git log $BASE_COMMIT..HEAD --merges --format="%H")
+          
+          if [ -z "$MERGE_COMMITS" ]; then
+            echo "マージコミットが見つかりませんでした"
+            echo "pr_items=- 特にマージされたPRはありません。" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # PRリストを作成
+          PR_ITEMS=""
+          echo "マージされたPRの詳細を収集しています..."
+          
+          for COMMIT in $MERGE_COMMITS; do
+            # マージコミットメッセージを取得
+            COMMIT_MSG=$(git show -s --format="%s" $COMMIT)
+            echo "コミットメッセージ: $COMMIT_MSG"
+            
+            # "Merge pull request"が含まれていない場合は、次のコミットに進む
+            if ! echo "$COMMIT_MSG" | grep -q "Merge pull request"; then
+              echo "マージコミットではないためスキップします"
+              continue
+            fi
+            
+            # PR番号を抽出
+            PR_NUMBER=$(echo "$COMMIT_MSG" | grep -o '#[0-9]\+' | cut -d'#' -f2)
+            if [ -z "$PR_NUMBER" ]; then
+              echo "PR番号を抽出できませんでした"
+              continue
+            fi
+            
+            echo "PR番号: $PR_NUMBER"
+            
+            # GitHub CLIでPR情報を取得
+            PR_DATA=$(gh pr view $PR_NUMBER --json title,author,url --repo ${{ github.repository }})
+            PR_TITLE=$(echo $PR_DATA | jq -r '.title')
+            PR_AUTHOR=$(echo $PR_DATA | jq -r '.author.login')
+            PR_URL=$(echo $PR_DATA | jq -r '.url')
+            
+            # フォーマットしたPR情報を追加
+            PR_ITEMS="${PR_ITEMS}- [#${PR_NUMBER}: ${PR_TITLE}](${PR_URL}) by @${PR_AUTHOR}\n"
+          done
+          
+          # 出力をGitHub Actionsの出力変数に設定
+          echo "pr_items<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$PR_ITEMS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          # PRリストを取得
+          PR_ITEMS="${{ steps.pr-list.outputs.pr_items }}"
+          
+          # PRを作成
           gh pr create \
             --base release \
             --head develop \
@@ -56,6 +137,9 @@ jobs:
             ### バージョン情報
             - リリースバージョン: v${{ steps.package-version.outputs.version }}
             
+            ### 含まれるPR
+            $PR_ITEMS
+            
             ### 変更内容
             - developブランチの全ての変更を含みます
             
@@ -64,5 +148,3 @@ jobs:
             - マージ前に変更内容を慎重に確認してください" \
             --label "release" \
             --label "automated-pr"
-        env:
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
