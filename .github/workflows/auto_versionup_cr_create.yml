@@ -38,8 +38,24 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
+      - name: Check differences between develop and release
+        id: check_diff
+        run: |
+          git fetch origin release:release
+          # developとreleaseブランチの差分を確認
+          if [ -z "$(git diff develop release)" ]; then
+            # 差分がない場合
+            echo "has_diff=false" >> $GITHUB_OUTPUT
+            echo "差分が見つかりませんでした。PRの作成をスキップします。"
+          else
+            # 差分がある場合
+            echo "has_diff=true" >> $GITHUB_OUTPUT
+            echo "差分が見つかりました。PRを作成します。"
+          fi
+
       - name: Version up
         id: version-up
+        if: steps.check_diff.outputs.has_diff == 'true'
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           npm version minor
@@ -50,6 +66,7 @@ jobs:
       # PRの作成でもトークンを使用
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
+        if: steps.check_diff.outputs.has_diff == 'true'
         with:
           token: ${{ steps.generate_token.outputs.token }}  # GitHub TOKENの代わりにApp tokenを使用
           commit-message: "chore: bump version to v${{ steps.version-up.outputs.new_version }}"
